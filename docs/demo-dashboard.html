@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Synology NAS — Space Analysis</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#0f0f1a; color:#e0e0e0; }
+
+.header { background:linear-gradient(135deg,#1a1a2e,#16213e); padding:24px 32px; border-bottom:2px solid #e94560; display:flex; justify-content:space-between; align-items:center; }
+.header h1 { font-size:22px; color:#fff; }
+.header h1 span { color:#e94560; }
+.header .stats { display:flex; gap:32px; }
+.header .stat { text-align:right; }
+.header .stat .big { font-size:28px; font-weight:bold; color:#e94560; }
+.header .stat .big.green { color:#2ecc71; }
+.header .stat .label { font-size:12px; color:#888; }
+
+.tabs { display:flex; background:#16213e; border-bottom:1px solid #0f3460; }
+.tab { padding:12px 24px; cursor:pointer; color:#888; font-size:14px; font-weight:600; border-bottom:3px solid transparent; transition:all 0.2s; }
+.tab:hover { color:#ccc; }
+.tab.active { color:#e94560; border-bottom-color:#e94560; }
+
+.content { padding:24px 32px; }
+
+.cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; margin-bottom:32px; }
+.card { background:#16213e; border-radius:10px; padding:20px; border:1px solid #0f3460; position:relative; overflow:hidden; }
+.card .bar { position:absolute; bottom:0; left:0; height:4px; border-radius:0 2px 0 10px; }
+.card .name { font-size:13px; color:#888; margin-bottom:4px; }
+.card .size { font-size:24px; font-weight:bold; }
+.card .pct { font-size:12px; color:#888; margin-top:4px; }
+
+#treemap-wrap { background:#16213e; border-radius:10px; border:1px solid #0f3460; overflow:hidden; margin-bottom:32px; }
+#treemap-header { padding:16px 20px; border-bottom:1px solid #0f3460; }
+#treemap-header h2 { font-size:16px; color:#fff; }
+#treemap { width:100%; height:420px; position:relative; }
+.tm-node { position:absolute; overflow:hidden; cursor:pointer; transition:opacity 0.15s; display:flex; flex-direction:column; justify-content:center; align-items:center; }
+.tm-node:hover { opacity:0.8; z-index:10; }
+.tm-label { font-size:12px; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,0.8); text-align:center; pointer-events:none; padding:4px; }
+.tm-label .sz { font-size:11px; opacity:0.8; }
+
+.table-wrap { background:#16213e; border-radius:10px; border:1px solid #0f3460; overflow:hidden; margin-bottom:32px; }
+.table-wrap h2 { padding:16px 20px; font-size:16px; color:#fff; border-bottom:1px solid #0f3460; }
+table { width:100%; border-collapse:collapse; }
+th { text-align:left; padding:10px 16px; font-size:12px; color:#888; text-transform:uppercase; letter-spacing:0.5px; border-bottom:1px solid #0f3460; }
+td { padding:10px 16px; font-size:13px; border-bottom:1px solid rgba(15,52,96,0.5); }
+td.sz { font-weight:600; color:#e94560; white-space:nowrap; text-align:right; }
+td.path { color:#aaa; word-break:break-all; max-width:600px; }
+td.date { color:#666; white-space:nowrap; }
+tr:hover { background:rgba(233,69,96,0.05); }
+
+.tooltip { position:fixed; background:#1a1a2e; border:1px solid #e94560; border-radius:8px; padding:14px 18px; font-size:13px; pointer-events:none; z-index:1000; display:none; max-width:350px; box-shadow:0 8px 32px rgba(0,0,0,0.6); }
+.tooltip .tt-name { font-weight:bold; color:#fff; font-size:14px; }
+.tooltip .tt-size { color:#e94560; font-size:18px; font-weight:bold; margin:4px 0; }
+.tooltip .tt-pct { color:#888; font-size:12px; }
+
+.panel { display:none; }
+.panel.active { display:block; }
+
+.bar-chart { margin:16px 0; }
+.bar-row { display:flex; align-items:center; margin:6px 0; }
+.bar-name { width:180px; font-size:13px; color:#ccc; text-align:right; padding-right:12px; }
+.bar-track { flex:1; height:28px; background:#0f0f1a; border-radius:4px; overflow:hidden; }
+.bar-fill { height:100%; border-radius:4px; display:flex; align-items:center; padding:0 10px; font-size:12px; color:#fff; font-weight:600; min-width:fit-content; white-space:nowrap; }
+.bar-value { width:90px; font-size:13px; color:#888; padding-left:12px; text-align:right; }
+</style>
+</head>
+<body>
+
+<div class="header">
+    <h1>📊 Synology NAS — <span>Space Analysis</span></h1>
+    <div class="stats">
+        <div class="stat">
+            <div class="big green">247 GB</div>
+            <div class="label">Reclaimable</div>
+        </div>
+        <div class="stat">
+            <div class="big">8.2 TB</div>
+            <div class="label">Total Used</div>
+        </div>
+    </div>
+</div>
+
+<div class="tabs">
+    <div class="tab active" onclick="showPanel('overview')">Overview</div>
+    <div class="tab" onclick="showPanel('treemap')">Treemap</div>
+    <div class="tab" onclick="showPanel('files')">Largest Files</div>
+    <div class="tab" onclick="showPanel('reclaimable')">Reclaimable Space</div>
+</div>
+
+<div class="content">
+
+<div class="panel active" id="panel-overview">
+<div class="cards" id="cards"></div>
+<div class="table-wrap">
+<h2>Storage Breakdown</h2>
+<div class="bar-chart" id="bar-chart"></div>
+</div>
+</div>
+
+<div class="panel" id="panel-treemap">
+<div id="treemap-wrap">
+    <div id="treemap-header"><h2>Disk Usage Treemap</h2></div>
+    <div id="treemap"></div>
+</div>
+</div>
+
+<div class="panel" id="panel-files">
+<div class="table-wrap">
+    <h2>Top 20 Largest Files</h2>
+    <table>
+        <thead><tr><th>Size</th><th>File Path</th><th>Modified</th></tr></thead>
+        <tbody id="file-tbody"></tbody>
+    </table>
+</div>
+</div>
+
+<div class="panel" id="panel-reclaimable">
+<div class="cards" id="reclaim-cards"></div>
+<div class="table-wrap">
+    <h2>Reclaimable Items</h2>
+    <table>
+        <thead><tr><th>Size</th><th>What</th><th>Where</th><th>Why</th></tr></thead>
+        <tbody id="reclaim-tbody"></tbody>
+    </table>
+</div>
+</div>
+
+</div>
+
+<div class="tooltip" id="tooltip">
+    <div class="tt-name"></div>
+    <div class="tt-size"></div>
+    <div class="tt-pct"></div>
+</div>
+
+<script>
+const TREEMAP = {
+    name: "volume1", size: 8200000, human_size: "8.2 TB",
+    children: [
+        {name: "Shared Photos", size: 2800000, human_size: "2.8 TB"},
+        {name: "Backups", size: 2100000, human_size: "2.1 TB"},
+        {name: "Surveillance", size: 1400000, human_size: "1.4 TB"},
+        {name: "Documents", size: 680000, human_size: "680 GB"},
+        {name: "Docker", size: 520000, human_size: "520 GB"},
+        {name: "Downloads", size: 410000, human_size: "410 GB"},
+        {name: "User Homes", size: 290000, human_size: "290 GB"}
+    ]
+};
+const TOTAL = TREEMAP.size;
+
+const AUTO_COLORS = ['#e74c3c','#e67e22','#3498db','#2ecc71','#9b59b6','#1abc9c','#f39c12'];
+const COLORS = {};
+TREEMAP.children.sort((a,b)=>b.size-a.size).forEach((c,i) => { COLORS[c.name] = AUTO_COLORS[i]; });
+
+const FILES = [
+    {human_size:"42.0 GB", path:"/volume1/backups/server-full-2024-01.tar.gz", modified:"2024-01-15"},
+    {human_size:"42.0 GB", path:"/volume1/backups/server-full-2024-06.tar.gz", modified:"2024-06-01"},
+    {human_size:"38.5 GB", path:"/volume1/docker/volumes/postgres-data/base/main", modified:"2025-02-20"},
+    {human_size:"24.0 GB", path:"/volume1/downloads/ubuntu-24.04-desktop-amd64.iso", modified:"2025-01-10"},
+    {human_size:"18.2 GB", path:"/volume1/downloads/Win11_24H2_English_x64.iso", modified:"2024-11-05"},
+    {human_size:"15.8 GB", path:"/volume1/docker/volumes/jellyfin-cache/transcodes", modified:"2025-02-18"},
+    {human_size:"12.4 GB", path:"/volume1/homes/alex/Documents/project-archive.zip", modified:"2023-08-22"},
+    {human_size:"12.4 GB", path:"/volume1/downloads/project-archive.zip", modified:"2023-08-22"},
+    {human_size:"9.7 GB", path:"/volume1/backups/photos-export-2023.tar", modified:"2023-12-31"},
+    {human_size:"8.1 GB", path:"/volume1/docker/overlay2/abc123/merged/var/log/app.log", modified:"2025-02-27"},
+    {human_size:"6.3 GB", path:"/volume1/surveillance/Front Door/2025-02-27.mp4", modified:"2025-02-27"},
+    {human_size:"5.9 GB", path:"/volume1/downloads/Fedora-41-x86_64.iso", modified:"2024-10-29"},
+    {human_size:"4.8 GB", path:"/volume1/homes/alex/Downloads/game-installer.exe", modified:"2024-03-15"},
+    {human_size:"4.2 GB", path:"/volume1/documents/old-vm-snapshots/win10-base.qcow2", modified:"2022-06-10"},
+    {human_size:"3.9 GB", path:"/volume1/@synologydrive/@sync/repo/a/b/.x", modified:"2024-09-12"},
+];
+
+const RECLAIM_CARDS = [
+    {name:"Duplicate Files", size:"84.4 GB", color:"#e94560"},
+    {name:"Docker Cleanup", size:"62.0 GB", color:"#e67e22"},
+    {name:"ISO Images", size:"48.1 GB", color:"#9b59b6"},
+    {name:"Old Snapshots", size:"33.0 GB", color:"#3498db"},
+    {name:"Recycle Bins", size:"12.5 GB", color:"#2ecc71"},
+    {name:"Log Files", size:"8.1 GB", color:"#636e72"},
+];
+
+const RECLAIM_ITEMS = [
+    {size:"42.0 GB", what:"Duplicate server backup", where:"/volume1/backups/", why:"Identical to June backup"},
+    {size:"24.0 GB", what:"Ubuntu 24.04 ISO", where:"/volume1/downloads/", why:"Re-downloadable"},
+    {size:"18.2 GB", what:"Windows 11 ISO", where:"/volume1/downloads/", why:"Re-downloadable"},
+    {size:"15.8 GB", what:"Jellyfin transcode cache", where:"/volume1/docker/volumes/", why:"Cache — rebuilds automatically"},
+    {size:"12.4 GB", what:"Duplicate project archive", where:"In homes/ and downloads/", why:"Exact duplicate — delete one"},
+    {size:"12.5 GB", what:"Recycle bins (4 shares)", where:"#recycle folders", why:"Already-deleted files"},
+    {size:"8.1 GB", what:"Docker app.log", where:"/volume1/docker/overlay2/", why:"Oversized log — safe to truncate"},
+    {size:"5.9 GB", what:"Fedora 41 ISO", where:"/volume1/downloads/", why:"Re-downloadable"},
+    {size:"4.2 GB", what:"Old VM snapshot", where:"/volume1/documents/", why:"From 2022 — likely unused"},
+];
+
+function pct(part, whole) { return ((part / whole) * 100).toFixed(1); }
+
+function showPanel(name) {
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('panel-' + name).classList.add('active');
+    event.target.classList.add('active');
+    if (name === 'treemap') renderTreemap();
+}
+
+function renderCards() {
+    const el = document.getElementById('cards');
+    let html = '';
+    TREEMAP.children.forEach(c => {
+        const p = pct(c.size, TOTAL);
+        const color = COLORS[c.name] || '#636e72';
+        html += '<div class="card"><div class="bar" style="width:' + p + '%;background:' + color + '"></div>' +
+            '<div class="name">' + c.name + '</div><div class="size" style="color:' + color + '">' + c.human_size + '</div>' +
+            '<div class="pct">' + p + '% of total</div></div>';
+    });
+    el.innerHTML = html;
+}
+
+function renderBarChart() {
+    const el = document.getElementById('bar-chart');
+    const cats = TREEMAP.children;
+    const maxSize = cats[0].size;
+    let html = '';
+    cats.forEach(c => {
+        const p = pct(c.size, TOTAL);
+        const barW = (c.size / maxSize * 100).toFixed(1);
+        const color = COLORS[c.name] || '#636e72';
+        html += '<div class="bar-row"><div class="bar-name">' + c.name + '</div>' +
+            '<div class="bar-track"><div class="bar-fill" style="width:' + barW + '%;background:' + color + '">' + p + '%</div></div>' +
+            '<div class="bar-value">' + c.human_size + '</div></div>';
+    });
+    el.innerHTML = html;
+}
+
+function squarify(items, x, y, w, h) {
+    if (!items.length) return [];
+    const totalSize = items.reduce((s,i) => s + i.size, 0);
+    if (totalSize <= 0) return [];
+    const rects = [];
+    let rem = [...items], cx=x, cy=y, cw=w, ch=h;
+    while (rem.length > 0) {
+        const isWide = cw >= ch;
+        const sideLen = isWide ? ch : cw;
+        const remaining = rem.reduce((s,i) => s + i.size, 0);
+        let row = [rem[0]], rowSize = rem[0].size;
+        rem = rem.slice(1);
+        function worst(row, rs, sl) {
+            const rl = (rs/remaining)*(isWide?cw:ch);
+            if (rl<=0) return Infinity;
+            let w=0;
+            for (const it of row) { const ia=(it.size/remaining)*sl*(isWide?cw:ch); const il=ia/rl; w=Math.max(w,Math.max(rl/il,il/rl)); }
+            return w;
+        }
+        while (rem.length > 0) {
+            const nr=[...row,rem[0]], ns=rowSize+rem[0].size;
+            if (worst(nr,ns,sideLen)<=worst(row,rowSize,sideLen)) { row=nr; rowSize=ns; rem=rem.slice(1); }
+            else break;
+        }
+        const rt = (rowSize/remaining)*(isWide?cw:ch);
+        let off=0;
+        for (const it of row) {
+            const il = sideLen*(it.size/rowSize);
+            if (isWide) rects.push({item:it,x:cx,y:cy+off,w:rt,h:il});
+            else rects.push({item:it,x:cx+off,y:cy,w:il,h:rt});
+            off += il;
+        }
+        if (isWide) { cx+=rt; cw-=rt; } else { cy+=rt; ch-=rt; }
+    }
+    return rects;
+}
+
+function renderTreemap() {
+    const container = document.getElementById('treemap');
+    container.innerHTML = '';
+    const W = container.clientWidth, H = container.clientHeight;
+    const sorted = [...TREEMAP.children].sort((a,b)=>b.size-a.size);
+    const rects = squarify(sorted, 0, 0, W, H);
+    rects.forEach(r => {
+        if (r.w < 2 || r.h < 2) return;
+        const div = document.createElement('div');
+        div.className = 'tm-node';
+        div.style.cssText = 'left:'+r.x+'px;top:'+r.y+'px;width:'+r.w+'px;height:'+r.h+'px;background:'+(COLORS[r.item.name]||'#636e72')+';border:2px solid rgba(0,0,0,0.3);';
+        if (r.w > 60 && r.h > 36) {
+            div.innerHTML = '<div class="tm-label">' + r.item.name + '<br><span class="sz">' + r.item.human_size + '</span></div>';
+        }
+        div.addEventListener('mousemove', e => {
+            const tt = document.getElementById('tooltip');
+            tt.style.display='block';
+            tt.querySelector('.tt-name').textContent = r.item.name;
+            tt.querySelector('.tt-size').textContent = r.item.human_size;
+            tt.querySelector('.tt-pct').textContent = pct(r.item.size, TOTAL) + '% of total storage';
+            let tx=e.clientX+15, ty=e.clientY+15;
+            if (tx+300>window.innerWidth) tx=e.clientX-310;
+            tt.style.left=tx+'px'; tt.style.top=ty+'px';
+        });
+        div.addEventListener('mouseleave', () => { document.getElementById('tooltip').style.display='none'; });
+        container.appendChild(div);
+    });
+}
+
+function renderFiles() {
+    const tbody = document.getElementById('file-tbody');
+    let html = '';
+    FILES.forEach(f => {
+        html += '<tr><td class="sz">' + f.human_size + '</td><td class="path">' + f.path + '</td><td class="date">' + f.modified + '</td></tr>';
+    });
+    tbody.innerHTML = html;
+}
+
+function renderReclaimable() {
+    const cards = document.getElementById('reclaim-cards');
+    let chtml = '';
+    RECLAIM_CARDS.forEach(c => {
+        chtml += '<div class="card"><div class="bar" style="width:100%;background:' + c.color + '"></div>' +
+            '<div class="name">' + c.name + '</div><div class="size" style="color:' + c.color + '">' + c.size + '</div></div>';
+    });
+    cards.innerHTML = chtml;
+
+    const tbody = document.getElementById('reclaim-tbody');
+    let html = '';
+    RECLAIM_ITEMS.forEach(i => {
+        html += '<tr><td class="sz">' + i.size + '</td><td>' + i.what + '</td><td class="path">' + i.where + '</td><td>' + i.why + '</td></tr>';
+    });
+    tbody.innerHTML = html;
+}
+
+renderCards();
+renderBarChart();
+renderFiles();
+renderReclaimable();
+window.addEventListener('resize', () => { if (document.getElementById('panel-treemap').classList.contains('active')) renderTreemap(); });
+</script>
+</body>
+</html>
