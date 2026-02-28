@@ -1,0 +1,19 @@
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Generated reports (contain system-specific data)
+reports/
+
+# Local tool data
+.clubhouse/
+.github/hooks/
