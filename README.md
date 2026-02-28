@@ -1,4 +1,4 @@
-# Synology Space Analyzer & Cleanup Utility
+# Synology NAS Disk Space Analyzer and Cleanup Toolkit
 
 A comprehensive disk space analysis and guided cleanup tool for Synology NAS devices. Run it from your Mac — it connects via SSH, analyzes your NAS, and opens an interactive treemap in your browser.
 
