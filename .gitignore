@@ -13,6 +13,7 @@ __pycache__/
 
 # Generated reports (contain system-specific data)
 reports/
+.target
 
 # Local tool data
 .clubhouse/

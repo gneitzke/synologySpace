@@ -1,158 +1,81 @@
 # Synology NAS Disk Space Analyzer and Cleanup Toolkit
 
-A comprehensive disk space analysis and guided cleanup tool for Synology NAS devices. Run it from your Mac — it connects via SSH, analyzes your NAS, and opens an interactive treemap in your browser.
+Find out what's eating your NAS storage and clean it up. Run from your Mac — it handles everything over SSH and opens an interactive dashboard in your browser.
 
-## Features
-
-- **Large Files & Directories** — Find the biggest space hogs across all volumes
-- **Duplicate Files** — Detect files with identical content wasting space
-- **Btrfs Snapshots** — Identify old snapshots that can be removed
-- **Docker Cleanup** — Find dangling images, stopped containers, unused volumes, and build cache
-- **Recycle Bins** — Scan `#recycle` folders in all shared folders
-- **Log Files** — Find oversized logs safe to truncate or remove
-- **Interactive Cleanup** — Menu-driven cleanup with confirmation prompts
-- **Treemap Visualization** — WinDirStat-style interactive treemap (self-contained HTML, no dependencies)
-- **Dry Run Mode** — See what would be cleaned without making changes
-
-## Prerequisites
-
-- Synology DSM (tested on DSM 7.x)
-- SSH access to your NAS
-- Root/sudo access (for full analysis)
-- Python 3 (for reports and cleanup tool — included in most DSM installations)
-- Bash shell
-
-## Quick Start (from your Mac)
+## Quick Start
 
 ```bash
-# Set up SSH keys first (one-time, avoids repeated password prompts)
-./run.sh admin@your-nas --setup-keys
-
-# Analyze your NAS — opens treemap in your browser automatically
+git clone https://github.com/gneitzke/synologySpace.git
+cd synologySpace
 ./run.sh admin@your-nas
-
-# Analyze + guided cleanup (with confirmation prompts)
-./run.sh admin@your-nas --cleanup
-
-# Dry run — see what would be cleaned without making changes
-./run.sh admin@your-nas --dry-run
-
-# Custom SSH port
-./run.sh admin@your-nas --port 2222
-
-# Run a single module
-./run.sh admin@your-nas --module docker
 ```
 
-The runner script handles everything: deploys scripts to the NAS, runs analysis over SSH, pulls reports back to `./reports/`, and opens the treemap in your browser.
+That's it. On first run it will:
+1. Offer to set up SSH keys (so you don't type your password repeatedly)
+2. Deploy the analyzer to your NAS
+3. Run a full disk scan (7 modules)
+4. Pull the results back and open an interactive dashboard
 
-<details>
-<summary>Manual usage (directly on the Synology)</summary>
+After the first run, just `./run.sh` — it remembers your target.
 
-1. **Copy to your Synology:**
-   ```bash
-   scp -r synologySpace/ user@your-nas:/tmp/synology-space-analyzer/
-   ```
-
-2. **SSH in and run:**
-   ```bash
-   ssh user@your-nas
-   cd /tmp/synology-space-analyzer
-   sudo bash analyze.sh
-   python3 report.py
-   python3 treemap.py
-   sudo python3 cleanup.py          # interactive cleanup
-   sudo python3 cleanup.py --dry-run # preview only
-   ```
-</details>
-
-## Usage
-
-### Full Analysis
 ```bash
-sudo bash analyze.sh
-```
-Runs all 7 analysis modules and saves results to `/tmp/synology-space-report/`.
-
-### Run a Single Module
-```bash
-sudo bash analyze.sh --module docker
-sudo bash analyze.sh --module recycle_bins
-sudo bash analyze.sh --module snapshots
+./run.sh                      # re-run analysis
+./run.sh --cleanup            # analysis + guided cleanup
+./run.sh --dry-run            # cleanup preview (no changes)
+./run.sh --module docker      # single module only
+./run.sh other-user@other-nas # switch target
 ```
 
-### List Available Modules
-```bash
-bash analyze.sh --list
-```
+## What It Finds
 
-Available modules:
 | Module | Description |
 |--------|-------------|
-| `large_files` | Find the largest files across all volumes |
-| `large_dirs` | Find the largest directories |
-| `duplicates` | Detect duplicate files by checksum |
-| `snapshots` | Analyze Btrfs snapshots |
-| `docker` | Docker images, containers, volumes, cache |
-| `recycle_bins` | Scan `#recycle` directories |
-| `logs` | Find oversized log files |
+| `large_files` | Biggest files across all volumes |
+| `large_dirs` | Biggest directories |
+| `duplicates` | Duplicate files by checksum |
+| `snapshots` | Old Btrfs snapshots |
+| `docker` | Dangling images, stopped containers, unused volumes |
+| `recycle_bins` | `#recycle` folder contents |
+| `logs` | Oversized log files |
 
-### Analysis + Report + Cleanup
+## Dashboard
+
+The HTML dashboard (`reports/report.html`) has 4 tabs:
+- **Overview** — Category cards + bar chart breakdown
+- **Treemap** — WinDirStat-style interactive visualization
+- **Largest Files** — Top 50 files by size
+- **Reclaimable Space** — Actionable cleanup recommendations
+
+A standalone treemap (`reports/treemap.html`) is also generated with drill-down navigation.
+
+## Cleanup
+
 ```bash
-sudo bash analyze.sh --report --cleanup
+./run.sh --cleanup    # interactive, with y/n confirmations
+./run.sh --dry-run    # preview only, no changes made
 ```
 
-## Cleanup Tool
+Categories: empty recycle bins, remove old snapshots, prune Docker, clean logs, review large files. Every action requires explicit confirmation.
 
-The interactive cleanup tool (`cleanup.py`) offers these categories:
+## Requirements
 
-1. **Empty Recycle Bins** — Remove files from `#recycle` folders (per-share or all at once)
-2. **Remove Old Snapshots** — Delete Btrfs snapshots older than 30 days
-3. **Prune Docker** — Remove dangling images, stopped containers, unused volumes, build cache
-4. **Clean Log Files** — Truncate active logs, remove compressed old logs
-5. **Review Large Files** — Interactively select and delete large files
-
-Every destructive action requires explicit `y/n` confirmation.
-
-## Safety
-
-- **No silent deletions** — Every file removal shows the exact path and size first
-- **Dry run mode** — Use `--dry-run` to preview all actions without changes
-- **Confirmation prompts** — All destructive operations require `y/n` input
-- **Smart log handling** — Active logs are truncated (not deleted); only old compressed logs are removed
-- **Snapshot age threshold** — Only suggests removing snapshots older than 30 days (configurable)
-
-## Output
-
-Analysis results are saved to `/tmp/synology-space-report/`:
-- `*.json` — Machine-readable module outputs
-- `*.txt` — Human-readable module outputs
-- `summary.json` — Aggregated summary
-- `report.html` — HTML report (generated by `report.py`)
-- `treemap.html` — Interactive treemap visualization (generated by `treemap.py`)
+- macOS (for the remote runner; Linux works too but `open` won't auto-launch browser)
+- SSH access to your Synology NAS (DSM 7.x)
+- sudo/root on the NAS (for full scan)
+- Python 3 on the NAS (included in most DSM installs)
 
 ## Project Structure
 
 ```
 synologySpace/
-├── run.sh               # ← Run from your Mac (SSH remote runner)
-├── analyze.sh           # Main analysis entry point (runs on NAS)
-├── report.py            # Report generator
-├── treemap.py           # Treemap visualization (WinDirStat-style)
+├── run.sh               # ← Start here (runs everything from your Mac)
+├── analyze.sh           # Analysis orchestrator (runs on NAS)
+├── report.py            # Dashboard + report generator
+├── treemap.py           # Treemap visualization
 ├── cleanup.py           # Interactive cleanup tool
-├── modules/
-│   ├── large_files.sh   # Large files scanner
-│   ├── large_dirs.sh    # Large directories scanner
-│   ├── duplicates.sh    # Duplicate file detector
-│   ├── snapshots.sh     # Btrfs snapshot analyzer
-│   ├── docker.sh        # Docker usage analyzer
-│   ├── recycle_bins.sh  # Recycle bin scanner
-│   └── logs.sh          # Log file analyzer
-├── lib/
-│   ├── utils.sh         # Shared utilities
-│   └── colors.sh        # Terminal colors
-├── reports/             # Downloaded reports (gitignored)
-└── README.md
+├── modules/             # 7 analysis modules
+├── lib/                 # Shared utilities
+└── reports/             # Downloaded results (gitignored)
 ```
 
 ## License
