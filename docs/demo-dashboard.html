@@ -72,7 +72,7 @@ tr:hover { background:rgba(233,69,96,0.05); }
     <h1>📊 Synology NAS — <span>Space Analysis</span></h1>
     <div class="stats">
         <div class="stat">
-            <div class="big green">247 GB</div>
+            <div class="big green">163.7 GB</div>
             <div class="label">Reclaimable</div>
         </div>
         <div class="stat">
@@ -173,24 +173,25 @@ const FILES = [
 ];
 
 const RECLAIM_CARDS = [
-    {name:"Duplicate Files", size:"84.4 GB", color:"#e94560"},
-    {name:"Docker Cleanup", size:"62.0 GB", color:"#e67e22"},
+    {name:"Duplicate Files", size:"54.4 GB", color:"#e94560"},
     {name:"ISO Images", size:"48.1 GB", color:"#9b59b6"},
-    {name:"Old Snapshots", size:"33.0 GB", color:"#3498db"},
+    {name:"Old Snapshots", size:"24.8 GB", color:"#3498db"},
+    {name:"Docker Cleanup", size:"15.8 GB", color:"#e67e22"},
     {name:"Recycle Bins", size:"12.5 GB", color:"#2ecc71"},
     {name:"Log Files", size:"8.1 GB", color:"#636e72"},
 ];
 
 const RECLAIM_ITEMS = [
-    {size:"42.0 GB", what:"Duplicate server backup", where:"/volume1/backups/", why:"Identical to June backup"},
+    {size:"42.0 GB", what:"Duplicate server backup", where:"/volume1/backups/server-full-2024-01.tar.gz", why:"Identical to June backup — keep one"},
     {size:"24.0 GB", what:"Ubuntu 24.04 ISO", where:"/volume1/downloads/", why:"Re-downloadable"},
+    {size:"18.5 GB", what:"3 Btrfs snapshots (90+ days old)", where:"/volume1/.snapshots/", why:"Older than 90 days — safe to remove"},
     {size:"18.2 GB", what:"Windows 11 ISO", where:"/volume1/downloads/", why:"Re-downloadable"},
-    {size:"15.8 GB", what:"Jellyfin transcode cache", where:"/volume1/docker/volumes/", why:"Cache — rebuilds automatically"},
-    {size:"12.4 GB", what:"Duplicate project archive", where:"In homes/ and downloads/", why:"Exact duplicate — delete one"},
+    {size:"15.8 GB", what:"Jellyfin transcode cache", where:"/volume1/docker/volumes/jellyfin-cache/", why:"Cache — rebuilds automatically"},
     {size:"12.5 GB", what:"Recycle bins (4 shares)", where:"#recycle folders", why:"Already-deleted files"},
-    {size:"8.1 GB", what:"Docker app.log", where:"/volume1/docker/overlay2/", why:"Oversized log — safe to truncate"},
+    {size:"12.4 GB", what:"Duplicate project archive", where:"In homes/ and downloads/", why:"Exact duplicate — delete one"},
+    {size:"8.1 GB", what:"Docker app.log", where:"/volume1/docker/overlay2/.../var/log/", why:"Oversized log — safe to truncate"},
+    {size:"6.3 GB", what:"2 Btrfs snapshots (60+ days old)", where:"/volume1/.snapshots/", why:"Older than 60 days"},
     {size:"5.9 GB", what:"Fedora 41 ISO", where:"/volume1/downloads/", why:"Re-downloadable"},
-    {size:"4.2 GB", what:"Old VM snapshot", where:"/volume1/documents/", why:"From 2022 — likely unused"},
 ];
 
 function pct(part, whole) { return ((part / whole) * 100).toFixed(1); }
